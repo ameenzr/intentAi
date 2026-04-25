@@ -94,18 +94,7 @@ label {
   letter-spacing: 0.01em;
 }
 
-.model-badge {
-  background: var(--accent-dim);
-  border: 1px solid rgba(0, 201, 167, 0.2);
-  border-radius: var(--radius-pill);
-  color: var(--accent);
-  flex: 0 0 auto;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 5px 10px;
-  white-space: nowrap;
-}
+
 
 .domain-badge {
   background: rgba(255, 255, 255, 0.05);
@@ -387,31 +376,32 @@ label {
   box-sizing: border-box;
   display: grid;
   flex: 1;
-  gap: 12px;
-  grid-template-columns: minmax(270px, 330px) minmax(0, 1fr) minmax(270px, 350px);
+  grid-template-columns: minmax(260px, 310px) minmax(0, 1fr) minmax(310px, 460px);
   overflow: hidden;
-  padding: 12px;
+  padding: 0;
+  gap: 0;
 }
 
 /* ── Workspace panels ──────────────────────────────────────────────────── */
 
 .ws-panel {
   background: var(--surface);
-  border: 1px solid var(--border-mid);
-  border-radius: var(--radius);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px;
   scrollbar-color: var(--border-strong) transparent;
   scrollbar-width: thin;
+}
+
+.ws-panel:not(:last-child) {
+  border-right: 1px solid var(--border-mid);
 }
 
 .ws-panel::-webkit-scrollbar {
@@ -425,7 +415,7 @@ label {
 
 .ws-panel-header {
   border-bottom: 1px solid var(--border);
-  padding-bottom: 14px;
+  padding-bottom: 8px;
 }
 
 .ws-panel-header h2 {
@@ -740,6 +730,50 @@ select option {
   border: 1px solid var(--border-mid);
   border-radius: var(--radius);
   overflow: hidden;
+  position: relative;
+}
+
+.fullscreen-button {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  width: 28px;
+  z-index: 10;
+}
+
+.fullscreen-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.preview-card:fullscreen,
+.preview-card:-webkit-full-screen {
+  background: #000;
+  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-card:fullscreen .preview-area,
+.preview-card:-webkit-full-screen .preview-area {
+  flex: 1;
+  min-height: 0;
+}
+
+.preview-card:fullscreen .preview-meta,
+.preview-card:-webkit-full-screen .preview-meta {
+  flex-shrink: 0;
 }
 
 .preview-area {
@@ -793,6 +827,23 @@ select option {
   z-index: 2;
 }
 
+.chromatic-layer {
+  inset: auto;
+  mix-blend-mode: screen;
+  opacity: 0.34;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.chromatic-red {
+  filter: contrast(115%) saturate(130%) sepia(80%) hue-rotate(-34deg) !important;
+}
+
+.chromatic-blue {
+  filter: contrast(115%) saturate(130%) sepia(80%) hue-rotate(145deg) !important;
+}
+
 .fake-background-blur {
   background-position: center;
   background-size: cover;
@@ -804,15 +855,36 @@ select option {
 }
 
 .image-color-overlay,
-.image-vignette {
+.image-vignette,
+.image-glow,
+.film-grain-overlay {
   inset: 0;
   pointer-events: none;
   position: absolute;
   z-index: 3;
 }
 
+.image-glow {
+  background:
+    radial-gradient(circle at 45% 35%, rgba(255, 255, 255, 0.45), transparent 28%),
+    radial-gradient(circle at 60% 70%, rgba(0, 201, 167, 0.25), transparent 36%);
+  filter: blur(18px);
+  mix-blend-mode: screen;
+  transform: scale(1.08);
+}
+
 .image-vignette {
   background: radial-gradient(circle, transparent 52%, rgba(0, 0, 0, 0.82));
+}
+
+.film-grain-overlay {
+  background-image:
+    radial-gradient(circle at 12% 20%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1px),
+    radial-gradient(circle at 68% 32%, rgba(0, 0, 0, 0.45) 0 1px, transparent 1px),
+    radial-gradient(circle at 42% 74%, rgba(255, 255, 255, 0.35) 0 1px, transparent 1px),
+    radial-gradient(circle at 88% 58%, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px);
+  background-size: 18px 18px, 23px 23px, 29px 29px, 31px 31px;
+  mix-blend-mode: overlay;
 }
 
 .image-text-overlay {
@@ -867,6 +939,20 @@ select option {
   bottom: 12px;
   right: 12px;
   text-align: right;
+}
+
+.watermark-overlay {
+  bottom: 12px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  position: absolute;
+  right: 14px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.65);
+  text-transform: uppercase;
+  z-index: 5;
 }
 
 .image-upload-placeholder {
@@ -987,6 +1073,26 @@ select option {
   background: var(--accent-dim);
   border-color: rgba(0, 201, 167, 0.25);
   color: var(--accent);
+}
+
+.export-now-button {
+  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 12px var(--accent-glow);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-left: auto;
+  min-height: 32px;
+  padding: 0 14px;
+  transition: box-shadow 0.18s, opacity 0.15s;
+}
+
+.export-now-button:hover {
+  box-shadow: 0 4px 20px rgba(0, 201, 167, 0.45);
+  opacity: 0.9;
 }
 
 .before-after-toggle {

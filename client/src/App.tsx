@@ -47,23 +47,52 @@ type ControlValue = string | number | boolean;
 type ImageState = {
   brightness: number;
   contrast: number;
+  highlights: number;
+  shadows: number;
+  whites: number;
+  blacks: number;
   saturation: number;
+  vibrance: number;
   warmth: number;
+  tint: number;
+  hueShift: number;
+  colorGradeShadows: string;
+  colorGradeMidtones: string;
+  colorGradeHighlights: string;
   exposure: number;
   blur: number;
   sharpness: number;
   clarity: number;
+  texture: number;
   noiseReduction: number;
+  dehaze: number;
+  filmGrain: number;
+  glow: number;
+  chromaticAberration: number;
+  stylePreset: string;
+  lutStrength: number;
   backgroundColor: string;
+  backgroundPreset: string;
   backgroundBlur: number;
   removeBackground: boolean;
   shadow: number;
+  shadowDirection: string;
+  skinSmoothing: number;
+  skinTone: number;
+  faceBrightness: number;
+  eyeEnhancement: number;
+  teethWhitening: number;
   cropRatio: string;
+  rotation: number;
+  perspectiveH: number;
+  perspectiveV: number;
+  flipped: boolean;
   zoom: number;
   padding: number;
   alignment: string;
   headlineText: string;
   subtext: string;
+  watermarkText: string;
   textPosition: string;
   fontSize: number;
   fontWeight: string;
@@ -72,6 +101,8 @@ type ImageState = {
   overlayColor: string;
   overlayOpacity: number;
   outputFormat: string;
+  exportSize: string;
+  resize: string;
   compression: number;
 };
 
@@ -85,23 +116,52 @@ const ACCEPTED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const defaultImageState: ImageState = {
   brightness: 100,
   contrast: 100,
+  highlights: 0,
+  shadows: 0,
+  whites: 0,
+  blacks: 0,
   saturation: 100,
+  vibrance: 0,
   warmth: 0,
+  tint: 0,
+  hueShift: 0,
+  colorGradeShadows: "#0b1020",
+  colorGradeMidtones: "#ffffff",
+  colorGradeHighlights: "#fff7df",
   exposure: 0,
   blur: 0,
   sharpness: 0,
   clarity: 0,
+  texture: 0,
   noiseReduction: 0,
+  dehaze: 0,
+  filmGrain: 0,
+  glow: 0,
+  chromaticAberration: 0,
+  stylePreset: "None",
+  lutStrength: 0,
   backgroundColor: "#ffffff",
+  backgroundPreset: "None",
   backgroundBlur: 0,
   removeBackground: false,
   shadow: 0,
+  shadowDirection: "Bottom",
+  skinSmoothing: 0,
+  skinTone: 0,
+  faceBrightness: 0,
+  eyeEnhancement: 0,
+  teethWhitening: 0,
   cropRatio: "Original",
+  rotation: 0,
+  perspectiveH: 0,
+  perspectiveV: 0,
+  flipped: false,
   zoom: 100,
   padding: 16,
   alignment: "Center",
   headlineText: "",
   subtext: "",
+  watermarkText: "",
   textPosition: "Bottom",
   fontSize: 28,
   fontWeight: "Bold",
@@ -110,6 +170,8 @@ const defaultImageState: ImageState = {
   overlayColor: "#000000",
   overlayOpacity: 0,
   outputFormat: "PNG",
+  exportSize: "Original",
+  resize: "Original",
   compression: 10,
 };
 
@@ -133,12 +195,29 @@ function getAvatarLetters(name: string): string {
 
 function getCssFilter(imageState: ImageState): string {
   const brightness =
-    imageState.brightness + imageState.exposure * 12 - imageState.noiseReduction * 0.08;
+    imageState.brightness +
+    imageState.exposure * 12 +
+    imageState.whites * 0.08 +
+    imageState.highlights * 0.05 +
+    imageState.faceBrightness * 0.08 -
+    imageState.noiseReduction * 0.08;
   const contrast =
-    imageState.contrast + imageState.clarity * 0.35 + imageState.sharpness * 0.18;
-  const saturation = imageState.saturation;
-  const sepia = Math.max(0, imageState.warmth) * 0.35;
-  const hueRotate = imageState.warmth < 0 ? imageState.warmth * 0.3 : 0;
+    imageState.contrast +
+    imageState.clarity * 0.35 +
+    imageState.texture * 0.18 +
+    imageState.dehaze * 0.2 +
+    imageState.sharpness * 0.18 -
+    imageState.noiseReduction * 0.12;
+  const saturation =
+    imageState.saturation +
+    imageState.vibrance * 0.4 -
+    imageState.skinSmoothing * 0.05 +
+    imageState.teethWhitening * 0.03;
+  const sepia = Math.max(0, imageState.warmth) * 0.35 + imageState.skinTone * 0.05;
+  const hueRotate =
+    imageState.hueShift +
+    imageState.tint * 0.2 +
+    (imageState.warmth < 0 ? imageState.warmth * 0.3 : 0);
   const blur = imageState.blur + imageState.noiseReduction * 0.015;
 
   return [
@@ -179,7 +258,65 @@ function getFontWeight(fontWeight: string): number {
   }[fontWeight] ?? 800;
 }
 
+function getBackgroundStyle(imageState: ImageState): string {
+  if (imageState.backgroundPreset === "Pure White") return "#ffffff";
+  if (imageState.backgroundPreset === "Studio Gray") return "#e7ebf0";
+  if (imageState.backgroundPreset === "Dark Studio") return "#111827";
+  if (imageState.backgroundPreset === "Gradient Light") {
+    return "linear-gradient(135deg, #ffffff, #dfe7f3)";
+  }
+  if (imageState.backgroundPreset === "Outdoor Bokeh") {
+    return "radial-gradient(circle at 30% 25%, #d9f99d, transparent 24%), radial-gradient(circle at 70% 30%, #bae6fd, transparent 22%), #f8fafc";
+  }
+  if (imageState.backgroundPreset === "Soft Blur" || imageState.backgroundPreset === "Blurred Original") {
+    return imageState.backgroundColor;
+  }
+
+  return imageState.backgroundColor;
+}
+
+function getImageTransform(imageState: ImageState): string {
+  const flip = imageState.flipped ? -1 : 1;
+  const perspectiveX = imageState.perspectiveH * 0.05;
+  const perspectiveY = imageState.perspectiveV * 0.05;
+
+  return [
+    `scale(${(imageState.zoom / 100) * flip}, ${imageState.zoom / 100})`,
+    `rotate(${imageState.rotation}deg)`,
+    `skew(${perspectiveX}deg, ${perspectiveY}deg)`,
+  ].join(" ");
+}
+
+function getShadowCss(imageState: ImageState): string {
+  const directionMap: Record<string, { x: number; y: number }> = {
+    Bottom: { x: 0, y: 0.28 },
+    "Bottom Left": { x: -0.22, y: 0.28 },
+    "Bottom Right": { x: 0.22, y: 0.28 },
+    Right: { x: 0.32, y: 0.08 },
+    Left: { x: -0.32, y: 0.08 },
+  };
+  const direction = directionMap[imageState.shadowDirection] ?? directionMap.Bottom;
+
+  return `${Math.round(imageState.shadow * direction.x)}px ${Math.round(
+    imageState.shadow * direction.y
+  )}px ${Math.round(imageState.shadow * 0.8)}px rgba(0, 0, 0, ${Math.min(
+    0.45,
+    imageState.shadow / 180
+  )})`;
+}
+
 function applyPresetToState(current: ImageState, preset: string): ImageState {
+  if (preset === "None") {
+    return {
+      ...current,
+      stylePreset: "None",
+      lutStrength: 0,
+      glow: 0,
+      filmGrain: 0,
+      chromaticAberration: 0,
+    };
+  }
+
   if (preset === "Amazon" || preset === "Premium" || preset === "Ecommerce Clean") {
     return {
       ...current,
@@ -197,10 +334,13 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       zoom: 104,
       cropRatio: "1:1",
       vignette: 0,
+      stylePreset: "None",
+      outputFormat: "PNG",
+      exportSize: "1500px",
     };
   }
 
-  if (preset === "Instagram" || preset === "Instagram Cozy") {
+  if (preset === "Instagram" || preset === "Instagram Cozy" || preset === "Golden Hour") {
     return {
       ...current,
       brightness: 106,
@@ -211,8 +351,12 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       shadow: 18,
       cropRatio: "4:5",
       vignette: 12,
+      glow: 10,
+      stylePreset: "Warm Glow",
       headlineText: current.headlineText || "Cozy moments",
       textPosition: "Bottom",
+      outputFormat: "JPEG",
+      exportSize: "1080px",
     };
   }
 
@@ -227,18 +371,193 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       shadow: 42,
       cropRatio: "16:9",
       vignette: 36,
+      glow: 8,
+      stylePreset: "Cinematic",
       headlineText: current.headlineText || "New Arrival",
       fontSize: 42,
       fontWeight: "Black",
       textPosition: "Bottom",
+      outputFormat: "JPEG",
+      exportSize: "2048px",
+    };
+  }
+
+  if (preset === "Vivid" || preset === "HDR Pop") {
+    return {
+      ...current,
+      brightness: 106,
+      contrast: preset === "HDR Pop" ? 136 : 122,
+      saturation: 126,
+      vibrance: 34,
+      clarity: 28,
+      texture: 18,
+      dehaze: 18,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Matte Film" || preset === "Faded Analog") {
+    return {
+      ...current,
+      brightness: 102,
+      contrast: 88,
+      saturation: 88,
+      warmth: preset === "Faded Analog" ? 28 : 12,
+      shadows: 24,
+      blacks: 26,
+      filmGrain: preset === "Faded Analog" ? 34 : 18,
+      vignette: 16,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Warm Glow") {
+    return {
+      ...current,
+      brightness: 108,
+      contrast: 106,
+      saturation: 112,
+      warmth: 38,
+      glow: 24,
+      vignette: 10,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Cool Tone") {
+    return {
+      ...current,
+      brightness: 100,
+      contrast: 118,
+      saturation: 92,
+      warmth: -34,
+      tint: -10,
+      colorGradeShadows: "#14213d",
+      overlayColor: "#14213d",
+      overlayOpacity: 8,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Black & White") {
+    return {
+      ...current,
+      contrast: 128,
+      saturation: 0,
+      warmth: 0,
+      clarity: 22,
+      vignette: 18,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Vintage") {
+    return {
+      ...current,
+      brightness: 104,
+      contrast: 96,
+      saturation: 82,
+      warmth: 44,
+      tint: 8,
+      filmGrain: 28,
+      vignette: 24,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "Soft Pastel") {
+    return {
+      ...current,
+      brightness: 112,
+      contrast: 88,
+      saturation: 108,
+      warmth: 12,
+      glow: 18,
+      clarity: -18,
+      stylePreset: preset,
+    };
+  }
+
+  if (preset === "LinkedIn") {
+    return {
+      ...current,
+      cropRatio: "1:1",
+      brightness: 108,
+      contrast: 112,
+      saturation: 100,
+      clarity: 16,
+      backgroundPreset: "Studio Gray",
+      outputFormat: "JPEG",
+      exportSize: "1080px",
+    };
+  }
+
+  if (preset === "YouTube") {
+    return {
+      ...current,
+      cropRatio: "16:9",
+      contrast: 126,
+      saturation: 118,
+      sharpness: 26,
+      headlineText: current.headlineText || "New Video",
+      fontSize: 46,
+      fontWeight: "Black",
+      textPosition: "Center",
+      outputFormat: "JPEG",
+      exportSize: "2048px",
     };
   }
 
   return current;
 }
 
+function parsePixelSize(value: string): number | null {
+  const match = value.match(/^(\d+)px$/i);
+  return match ? Number(match[1]) : null;
+}
+
+function getExportMimeType(format: "png" | "jpeg" | "webp" | "tiff") {
+  if (format === "jpeg") return "image/jpeg";
+  if (format === "webp") return "image/webp";
+  return "image/png";
+}
+
+function getExportExtension(format: "png" | "jpeg" | "webp" | "tiff") {
+  if (format === "jpeg") return "jpg";
+  if (format === "webp") return "webp";
+  if (format === "tiff") return "png";
+  return "png";
+}
+
+function getCanvasCropRatio(cropRatio: string, fallbackWidth: number, fallbackHeight: number) {
+  const ratioMap: Record<string, number> = {
+    "1:1": 1,
+    "4:5": 4 / 5,
+    "16:9": 16 / 9,
+    "9:16": 9 / 16,
+    "3:4": 3 / 4,
+    "4:3": 4 / 3,
+    "2:3": 2 / 3,
+    "5:4": 5 / 4,
+  };
+
+  return ratioMap[cropRatio] ?? fallbackWidth / fallbackHeight;
+}
+
+function getHexAsRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  const value = normalized.length === 3
+    ? normalized.split("").map((character) => character + character).join("")
+    : normalized;
+  const red = parseInt(value.slice(0, 2), 16) || 0;
+  const green = parseInt(value.slice(2, 4), 16) || 0;
+  const blue = parseInt(value.slice(4, 6), 16) || 0;
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function App() {
   const imageElementRef = useRef<HTMLImageElement | null>(null);
+  const previewCardRef = useRef<HTMLDivElement | null>(null);
   const [page, setPage] = useState<Page>("landing");
   const [software, setSoftware] = useState<SoftwareSummary[]>([]);
   const [selectedSoftwareId, setSelectedSoftwareId] = useState("");
@@ -250,6 +569,7 @@ function App() {
   const [imageError, setImageError] = useState("");
   const [imageState, setImageState] = useState<ImageState>(defaultImageState);
   const [showBefore, setShowBefore] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [generatedInterface, setGeneratedInterface] =
     useState<GeneratedInterface | null>(null);
   const [generatedUserIntent, setGeneratedUserIntent] = useState("");
@@ -280,6 +600,20 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [showCapabilities]);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void previewCardRef.current?.requestFullscreen();
+    }
+  };
 
   useEffect(() => {
     const loadSoftware = async () => {
@@ -395,10 +729,30 @@ function App() {
           return { ...current, brightness: 100 + numericValue };
         case "contrast":
           return { ...current, contrast: 100 + numericValue };
+        case "highlights":
+          return { ...current, highlights: numericValue };
+        case "shadows":
+          return { ...current, shadows: numericValue, brightness: current.brightness + numericValue * 0.04 };
+        case "whites":
+          return { ...current, whites: numericValue };
+        case "blacks":
+          return { ...current, blacks: numericValue, contrast: 100 + numericValue * -0.12 };
         case "saturation":
           return { ...current, saturation: 100 + numericValue };
+        case "vibrance":
+          return { ...current, vibrance: numericValue };
         case "warmth":
           return { ...current, warmth: numericValue };
+        case "tint":
+          return { ...current, tint: numericValue };
+        case "hue_shift":
+          return { ...current, hueShift: numericValue };
+        case "color_grade_shadows":
+          return { ...current, colorGradeShadows: stringValue, overlayColor: stringValue, overlayOpacity: Math.max(current.overlayOpacity, 10) };
+        case "color_grade_midtones":
+          return { ...current, colorGradeMidtones: stringValue, overlayColor: stringValue, overlayOpacity: Math.max(current.overlayOpacity, 8) };
+        case "color_grade_highlights":
+          return { ...current, colorGradeHighlights: stringValue, overlayColor: stringValue, overlayOpacity: Math.max(current.overlayOpacity, 6) };
         case "exposure":
           return { ...current, exposure: numericValue };
         case "blur":
@@ -408,18 +762,44 @@ function App() {
           return { ...current, sharpness: numericValue };
         case "clarity":
           return { ...current, clarity: numericValue };
+        case "texture":
+          return { ...current, texture: numericValue };
         case "noise_reduction":
           return { ...current, noiseReduction: numericValue };
+        case "dehaze":
+          return { ...current, dehaze: numericValue };
+        case "film_grain":
+          return { ...current, filmGrain: numericValue };
+        case "glow":
+          return { ...current, glow: numericValue };
+        case "chromatic_aberration":
+          return { ...current, chromaticAberration: numericValue };
+        case "style_preset":
+          return applyPresetToState({ ...current, stylePreset: stringValue }, stringValue);
+        case "lut_strength":
+          return { ...current, lutStrength: numericValue, contrast: 100 + numericValue * 0.2, saturation: 100 + numericValue * 0.15 };
         case "remove_background":
           return { ...current, removeBackground: booleanValue };
         case "background_color":
           return { ...current, backgroundColor: stringValue };
+        case "background_preset":
+          return { ...applyPresetToState(current, stringValue), backgroundPreset: stringValue };
         case "background_blur":
           return { ...current, backgroundBlur: numericValue };
         case "product_shadow":
           return { ...current, shadow: numericValue };
+        case "shadow_direction":
+          return { ...current, shadowDirection: stringValue };
         case "crop_ratio":
           return { ...current, cropRatio: stringValue };
+        case "rotation":
+          return { ...current, rotation: numericValue };
+        case "perspective_h":
+          return { ...current, perspectiveH: numericValue };
+        case "perspective_v":
+          return { ...current, perspectiveV: numericValue };
+        case "flip_horizontal":
+          return { ...current, flipped: booleanValue };
         case "padding":
           return { ...current, padding: numericValue };
         case "alignment":
@@ -431,6 +811,8 @@ function App() {
         case "subtext":
         case "subheadline_text":
           return { ...current, subtext: stringValue };
+        case "watermark_text":
+          return { ...current, watermarkText: stringValue };
         case "text_position":
           return { ...current, textPosition: stringValue };
         case "font_size":
@@ -445,8 +827,22 @@ function App() {
           return { ...current, overlayColor: stringValue };
         case "overlay_opacity":
           return { ...current, overlayOpacity: numericValue };
+        case "skin_smoothing":
+          return { ...current, skinSmoothing: numericValue, blur: Math.max(current.blur, numericValue * 0.02) };
+        case "skin_tone":
+          return { ...current, skinTone: numericValue, warmth: current.warmth + numericValue * 0.12 };
+        case "face_brightness":
+          return { ...current, faceBrightness: numericValue };
+        case "eye_enhancement":
+          return { ...current, eyeEnhancement: numericValue, clarity: Math.max(current.clarity, numericValue * 0.35) };
+        case "teeth_whitening":
+          return { ...current, teethWhitening: numericValue, saturation: Math.max(0, current.saturation - numericValue * 0.05) };
         case "output_format":
           return { ...current, outputFormat: stringValue };
+        case "export_size":
+          return { ...current, exportSize: stringValue };
+        case "resize":
+          return { ...current, resize: stringValue };
         case "compression":
           return { ...current, compression: numericValue };
         case "platform_preset":
@@ -467,8 +863,27 @@ function App() {
       return;
     }
 
-    if (["export_ecommerce", "export_png", "export_jpg"].includes(capabilityId)) {
-      void exportEditedImage(capabilityId === "export_jpg" ? "jpeg" : "png");
+    if (capabilityId === "flip_horizontal") {
+      setImageState((current) => ({ ...current, flipped: !current.flipped }));
+      return;
+    }
+
+    if (
+      ["export_ecommerce", "export_png", "export_jpg", "export_print"].includes(
+        capabilityId
+      )
+    ) {
+      void exportEditedImage(
+        capabilityId === "export_print"
+          ? "tiff"
+          : capabilityId === "export_jpg" || imageState.outputFormat === "JPEG"
+          ? "jpeg"
+          : capabilityId === "export_png"
+            ? "png"
+            : imageState.outputFormat === "WebP"
+              ? "webp"
+              : "png"
+      );
       return;
     }
 
@@ -508,27 +923,152 @@ function App() {
     setShowBefore(false);
   };
 
-  const exportEditedImage = async (format: "png" | "jpeg" = "png") => {
+  const exportEditedImage = async (formatOverride?: "png" | "jpeg" | "webp" | "tiff") => {
     const image = imageElementRef.current;
     if (!image) return;
 
+    const selectedFormat = formatOverride ?? imageState.outputFormat.toLowerCase();
+    const format =
+      selectedFormat === "jpg"
+        ? "jpeg"
+        : selectedFormat === "webp" || selectedFormat === "tiff" || selectedFormat === "jpeg"
+          ? selectedFormat
+          : "png";
     const canvas = document.createElement("canvas");
-    const width = image.naturalWidth || 1200;
-    const height = image.naturalHeight || 900;
+    const sourceWidth = image.naturalWidth || 1200;
+    const sourceHeight = image.naturalHeight || 900;
+    const exportSize =
+      parsePixelSize(imageState.exportSize) ??
+      parsePixelSize(imageState.resize) ??
+      (format === "tiff" ? 4096 : null);
+    const cropRatio = getCanvasCropRatio(imageState.cropRatio, sourceWidth, sourceHeight);
+    const width = exportSize ?? sourceWidth;
+    const height = Math.round(width / cropRatio);
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d");
     if (!context) return;
 
-    context.fillStyle = imageState.backgroundColor;
+    context.fillStyle =
+      imageState.backgroundPreset === "Dark Studio"
+        ? "#111827"
+        : imageState.backgroundPreset === "Studio Gray"
+          ? "#e7ebf0"
+          : imageState.backgroundColor;
     context.fillRect(0, 0, width, height);
+
+    if (imageState.backgroundPreset === "Gradient Light") {
+      const gradient = context.createLinearGradient(0, 0, width, height);
+      gradient.addColorStop(0, "#ffffff");
+      gradient.addColorStop(1, "#dfe7f3");
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, width, height);
+    }
+
+    const padding = Math.min(width, height) * (imageState.padding / 800);
+    const availableWidth = Math.max(1, width - padding * 2);
+    const availableHeight = Math.max(1, height - padding * 2);
+    const scale = Math.min(availableWidth / sourceWidth, availableHeight / sourceHeight) * (imageState.zoom / 100);
+    const drawWidth = sourceWidth * scale;
+    const drawHeight = sourceHeight * scale;
+    const alignmentX =
+      imageState.alignment === "Left"
+        ? padding
+        : imageState.alignment === "Right"
+          ? width - padding - drawWidth
+          : (width - drawWidth) / 2;
+    const alignmentY =
+      imageState.alignment === "Top"
+        ? padding
+        : imageState.alignment === "Bottom"
+          ? height - padding - drawHeight
+          : (height - drawHeight) / 2;
+
+    context.save();
+    context.translate(alignmentX + drawWidth / 2, alignmentY + drawHeight / 2);
+    context.rotate((imageState.rotation * Math.PI) / 180);
+    context.scale(imageState.flipped ? -1 : 1, 1);
+    if (imageState.shadow > 0) {
+      const shadowOffset = imageState.shadow / 2;
+      context.shadowColor = getHexAsRgba("#000000", Math.min(0.45, imageState.shadow / 180));
+      context.shadowBlur = imageState.shadow * 0.8;
+      context.shadowOffsetX =
+        imageState.shadowDirection === "Left"
+          ? -shadowOffset
+          : imageState.shadowDirection === "Right"
+            ? shadowOffset
+            : 0;
+      context.shadowOffsetY = shadowOffset;
+    }
     context.filter = imageFilter;
-    context.drawImage(image, 0, 0, width, height);
+    context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    context.restore();
+
+    if (imageState.overlayOpacity > 0) {
+      context.fillStyle = getHexAsRgba(imageState.overlayColor, imageState.overlayOpacity / 100);
+      context.fillRect(0, 0, width, height);
+    }
+
+    if (imageState.vignette > 0) {
+      const gradient = context.createRadialGradient(
+        width / 2,
+        height / 2,
+        Math.min(width, height) * 0.2,
+        width / 2,
+        height / 2,
+        Math.max(width, height) * 0.65
+      );
+      gradient.addColorStop(0, "rgba(0,0,0,0)");
+      gradient.addColorStop(1, getHexAsRgba("#000000", Math.min(0.7, imageState.vignette / 120)));
+      context.fillStyle = gradient;
+      context.fillRect(0, 0, width, height);
+    }
+
+    if (imageState.headlineText || imageState.subtext) {
+      context.shadowColor = "rgba(0, 0, 0, 0.55)";
+      context.shadowBlur = 18;
+      context.fillStyle = imageState.textColor;
+      context.textAlign = imageState.textPosition.includes("Left")
+        ? "left"
+        : imageState.textPosition.includes("Right")
+          ? "right"
+          : "center";
+      context.textBaseline = "middle";
+      context.font = `${getFontWeight(imageState.fontWeight)} ${Math.round(
+        imageState.fontSize * (width / 1000)
+      )}px Inter, Arial, sans-serif`;
+      const textX = imageState.textPosition.includes("Left")
+        ? width * 0.08
+        : imageState.textPosition.includes("Right")
+          ? width * 0.92
+          : width / 2;
+      const textY = imageState.textPosition === "Top"
+        ? height * 0.14
+        : imageState.textPosition === "Center"
+          ? height / 2
+          : height * 0.84;
+      if (imageState.headlineText) context.fillText(imageState.headlineText, textX, textY);
+      if (imageState.subtext) {
+        context.font = `500 ${Math.round(imageState.fontSize * 0.5 * (width / 1000))}px Inter, Arial, sans-serif`;
+        context.fillText(imageState.subtext, textX, textY + imageState.fontSize * 0.8);
+      }
+      context.shadowBlur = 0;
+    }
+
+    if (imageState.watermarkText) {
+      context.fillStyle = "rgba(255, 255, 255, 0.55)";
+      context.font = `700 ${Math.max(14, Math.round(width * 0.018))}px Inter, Arial, sans-serif`;
+      context.textAlign = "right";
+      context.fillText(imageState.watermarkText, width - 24, height - 24);
+    }
 
     const link = document.createElement("a");
-    const extension = format === "jpeg" ? "jpg" : "png";
+    const extension = getExportExtension(format);
     link.download = `miniphotopro-export.${extension}`;
-    link.href = canvas.toDataURL(`image/${format}`, 1 - imageState.compression / 120);
+    link.href = canvas.toDataURL(
+      getExportMimeType(format),
+      Math.max(0.08, 1 - imageState.compression / 120)
+    );
     link.click();
   };
 
@@ -565,7 +1105,7 @@ function App() {
         throw new Error(
           "error" in payload && payload.error
             ? payload.error
-            : "Could not generate an interface."
+            : "Could not build workspace."
         );
       }
       const nextGeneratedInterface = payload as GeneratedInterface;
@@ -583,7 +1123,7 @@ function App() {
       setGenerationError(
         error instanceof Error
           ? error.message
-          : "Could not generate an interface. Try again."
+          : "Could not build workspace. Try again."
       );
     } finally {
       setIsGeneratingInterface(false);
@@ -598,11 +1138,11 @@ function App() {
   const sendFollowUp = async () => {
     const message = followUpMessage.trim();
     if (!generatedInterface || !generatedUserIntent) {
-      setFollowUpError("Generate an interface before asking a follow-up.");
+      setFollowUpError("Build a workspace before asking a follow-up.");
       return;
     }
     if (!message) {
-      setFollowUpError("Ask how you want to refine the generated interface.");
+      setFollowUpError("Ask how you want to refine the workspace.");
       return;
     }
     const userMessage: ChatMessage = {
@@ -662,21 +1202,21 @@ function App() {
       <div className="landing-shell">
         {isFallbackMode ? (
           <div className="fallback-banner">
-            Running in fallback mode — OpenAI key not configured. Generated
-            interfaces will use the local fallback generator.
+            Running in fallback mode — OpenAI key not configured. Workspaces
+            will use the local fallback generator.
           </div>
         ) : null}
 
         <header className="landing-header">
           <div className="landing-brand">
             <p className="eyebrow">IntentUI</p>
-            <h1>Adaptive interfaces for complex software</h1>
+            <h1>Adaptive workspaces for complex software</h1>
             <p className="landing-subtitle">
-              Choose a software to generate a purpose-built interface tailored
+              Choose a software to build a workspace tailored
               to your goal.
             </p>
           </div>
-          <span className="model-badge">Mock capability model</span>
+
         </header>
 
         {softwareError ? (
@@ -750,7 +1290,7 @@ function App() {
             ? `${selectedSoftware.capabilities.length} capabilities`
             : "Capabilities"}
         </button>
-        <span className="model-badge">Mock capability model</span>
+
       </header>
 
       {isFallbackMode ? (
@@ -798,12 +1338,12 @@ function App() {
             disabled={isGeneratingInterface || isLoadingDetails}
             onClick={() => void generateInterface()}
           >
-            {isGeneratingInterface ? "Generating..." : "Generate Interface"}
+            {isGeneratingInterface ? "Building..." : "Build Workspace"}
           </button>
 
           {generationError ? (
             <div className="error-card">
-              <strong>Could not generate interface</strong>
+              <strong>Could not build workspace</strong>
               <p>{generationError}</p>
               <button
                 type="button"
@@ -825,7 +1365,7 @@ function App() {
               <div className="chat-thread">
                 {chatMessages.length === 0 ? (
                   <p className="muted-state">
-                    Ask how to refine the generated interface...
+                    Ask how to refine the workspace...
                   </p>
                 ) : null}
                 {chatMessages.map((msg) => (
@@ -896,11 +1436,29 @@ function App() {
 
           {isImageEditing ? (
             <div className="upload-zone">
-              <div className="preview-card">
+              <div className="preview-card" ref={previewCardRef}>
+                <button
+                  className="fullscreen-button"
+                  type="button"
+                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                  onClick={toggleFullscreen}
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    {isFullscreen ? (
+                      <>
+                        <path d="M5 1H1v4M9 1h4v4M5 13H1V9M9 13h4V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </>
+                    ) : (
+                      <>
+                        <path d="M1 5V1h4M9 1h4v4M1 9v4h4M13 9v4H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </>
+                    )}
+                  </svg>
+                </button>
                 <div
                   className="preview-area"
                   style={{
-                    backgroundColor: imageState.backgroundColor,
+                    background: getBackgroundStyle(imageState),
                   }}
                 >
                   {imagePreviewUrl ? (
@@ -913,12 +1471,19 @@ function App() {
                         padding: `${imageState.padding}px`,
                       }}
                     >
-                      {imageState.removeBackground ? (
+                      {imageState.removeBackground ||
+                      imageState.backgroundBlur > 0 ||
+                      ["Soft Blur", "Blurred Original"].includes(
+                        imageState.backgroundPreset
+                      ) ? (
                         <div
                           className="fake-background-blur"
                           style={{
                             backgroundImage: `url(${imagePreviewUrl})`,
-                            filter: `blur(${imageState.backgroundBlur * 0.12}px)`,
+                            filter: `blur(${Math.max(
+                              4,
+                              imageState.backgroundBlur * 0.16
+                            )}px)`,
                           }}
                         />
                       ) : null}
@@ -931,17 +1496,46 @@ function App() {
                           filter: showBefore ? "none" : imageFilter,
                           transform: showBefore
                             ? "scale(1)"
-                            : `scale(${imageState.zoom / 100})`,
+                            : getImageTransform(imageState),
                           boxShadow: showBefore
                             ? "none"
-                            : `0 ${Math.round(imageState.shadow * 0.28)}px ${Math.round(
-                                imageState.shadow * 0.8
-                              )}px rgba(0, 0, 0, ${Math.min(
-                                0.45,
-                                imageState.shadow / 180
-                              )})`,
+                            : getShadowCss(imageState),
                         }}
                       />
+                      {!showBefore && imageState.chromaticAberration > 0 ? (
+                        <>
+                          <img
+                            className="editable-image chromatic-layer chromatic-red"
+                            src={imagePreviewUrl}
+                            alt=""
+                            aria-hidden="true"
+                            style={{
+                              filter: imageFilter,
+                              transform: `${getImageTransform(imageState)} translateX(${
+                                imageState.chromaticAberration * 0.04
+                              }px)`,
+                            }}
+                          />
+                          <img
+                            className="editable-image chromatic-layer chromatic-blue"
+                            src={imagePreviewUrl}
+                            alt=""
+                            aria-hidden="true"
+                            style={{
+                              filter: imageFilter,
+                              transform: `${getImageTransform(imageState)} translateX(-${
+                                imageState.chromaticAberration * 0.04
+                              }px)`,
+                            }}
+                          />
+                        </>
+                      ) : null}
+                      {!showBefore && imageState.glow > 0 ? (
+                        <div
+                          className="image-glow"
+                          style={{ opacity: imageState.glow / 130 }}
+                        />
+                      ) : null}
                       {!showBefore && imageState.overlayOpacity > 0 ? (
                         <div
                           className="image-color-overlay"
@@ -955,6 +1549,12 @@ function App() {
                         <div
                           className="image-vignette"
                           style={{ opacity: imageState.vignette / 100 }}
+                        />
+                      ) : null}
+                      {!showBefore && imageState.filmGrain > 0 ? (
+                        <div
+                          className="film-grain-overlay"
+                          style={{ opacity: imageState.filmGrain / 180 }}
                         />
                       ) : null}
                       {!showBefore &&
@@ -975,6 +1575,11 @@ function App() {
                           {imageState.subtext ? <span>{imageState.subtext}</span> : null}
                         </div>
                       ) : null}
+                      {!showBefore && imageState.watermarkText ? (
+                        <div className="watermark-overlay">
+                          {imageState.watermarkText}
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     <div className="image-upload-placeholder">
@@ -985,7 +1590,7 @@ function App() {
                   )}
                 </div>
                 <div className="preview-meta">
-                  <span>Demo context only</span>
+
                   <strong>{imageFileName || "No image uploaded"}</strong>
                 </div>
               </div>
@@ -1030,6 +1635,23 @@ function App() {
                   <button type="button" onClick={() => applyQuickPreset("Cinematic Poster")}>
                     Cinematic Poster
                   </button>
+                  <button
+                    className="export-now-button"
+                    type="button"
+                    onClick={() =>
+                      void exportEditedImage(
+                        imageState.outputFormat === "JPEG"
+                          ? "jpeg"
+                          : imageState.outputFormat === "WebP"
+                            ? "webp"
+                            : imageState.outputFormat === "TIFF"
+                              ? "tiff"
+                              : "png"
+                      )
+                    }
+                  >
+                    &#8595; Export {imageState.outputFormat || "PNG"}
+                  </button>
                 </div>
               ) : null}
             </div>
@@ -1061,7 +1683,7 @@ function App() {
               </div>
               <strong>No file upload required</strong>
               <p>
-                Describe your goal in the chat panel and generate your interface.
+                Describe your goal in the chat panel and build your workspace.
               </p>
             </div>
           )}
@@ -1073,8 +1695,8 @@ function App() {
             <p className="section-label">Controls</p>
             <h2>
               {generatedInterface
-                ? (generatedInterface.interfaceTitle ?? "Generated interface")
-                : "Generated interface"}
+                ? (generatedInterface.interfaceTitle ?? "Generated workspace")
+                : "Generated workspace"}
             </h2>
             {generatedInterface?.intentSummary ? (
               <p className="controls-intent-summary">
@@ -1086,12 +1708,12 @@ function App() {
           {isGeneratingInterface ? (
             <div className="interface-loading-card" role="status">
               <span className="spinner" aria-hidden="true" />
-              <h2>Generating purpose-built interface&hellip;</h2>
+              <h2>Building purpose-built workspace&hellip;</h2>
             </div>
           ) : !generatedInterface ? (
             <div className="interface-empty-state">
               <h2>
-                Describe your goal and click Generate to build your interface.
+                Describe your goal and click Build Workspace to create your workspace.
               </h2>
             </div>
           ) : (

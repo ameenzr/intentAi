@@ -29,10 +29,7 @@ function ScanResultCard({
           <dt>Capabilities detected</dt>
           <dd>{capabilityCount}</dd>
         </div>
-        <div>
-          <dt>Mock capability model</dt>
-          <dd>active</dd>
-        </div>
+
         <div>
           <dt>Runtime</dt>
           <dd>simulated</dd>
