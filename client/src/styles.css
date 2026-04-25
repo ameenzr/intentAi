@@ -413,8 +413,13 @@ label {
   border-radius: 4px;
 }
 
+.media-panel {
+  overflow: hidden;
+}
+
 .ws-panel-header {
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
   padding-bottom: 8px;
 }
 
@@ -721,16 +726,33 @@ select option {
 /* ── Media panel ───────────────────────────────────────────────────────── */
 
 .upload-zone {
-  display: grid;
-  gap: 12px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.upload-zone.drag-over .preview-card {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), inset 0 0 40px rgba(0, 201, 167, 0.06);
+}
+
+.upload-zone.drag-over .preview-area {
+  background-color: rgba(0, 201, 167, 0.04);
 }
 
 .preview-card {
   background: #000;
   border: 1px solid var(--border-mid);
   border-radius: var(--radius);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
   overflow: hidden;
   position: relative;
+  transition: border-color 0.18s, box-shadow 0.18s;
 }
 
 .fullscreen-button {
@@ -779,18 +801,20 @@ select option {
 .preview-area {
   align-items: center;
   background:
-    linear-gradient(45deg, #0d1220 25%, transparent 25%),
-    linear-gradient(-45deg, #0d1220 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #0d1220 75%),
-    linear-gradient(-45deg, transparent 75%, #0d1220 75%);
-  background-color: #080c16;
-  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
-  background-size: 20px 20px;
+    linear-gradient(45deg, #0e1425 25%, transparent 25%),
+    linear-gradient(-45deg, #0e1425 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0e1425 75%),
+    linear-gradient(-45deg, transparent 75%, #0e1425 75%);
+  background-color: #090d1a;
+  background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+  background-size: 24px 24px;
   display: flex;
+  flex: 1;
   justify-content: center;
-  min-height: 320px;
+  min-height: 0;
   overflow: hidden;
-  padding: 16px;
+  padding: 20px;
+  transition: background-color 0.2s;
 }
 
 .editor-stage {
@@ -799,10 +823,10 @@ select option {
   border-radius: var(--radius-sm);
   box-sizing: border-box;
   display: flex;
+  flex: 1;
   justify-content: center;
-  max-height: 540px;
   max-width: 100%;
-  min-height: 240px;
+  min-height: 0;
   overflow: hidden;
   position: relative;
   width: 100%;
@@ -813,6 +837,30 @@ select option {
 .editor-align-left   { justify-content: flex-start; }
 .editor-align-right  { justify-content: flex-end; }
 
+.compare-badge {
+  background: rgba(0, 201, 167, 0.15);
+  border: 1px solid rgba(0, 201, 167, 0.35);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  font-size: 0.62rem;
+  font-weight: 800;
+  left: 10px;
+  letter-spacing: 0.1em;
+  padding: 3px 9px;
+  pointer-events: none;
+  position: absolute;
+  text-transform: uppercase;
+  top: 10px;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  z-index: 6;
+}
+
+.compare-badge.is-before {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-3);
+}
+
 .editable-image {
   border-radius: 5px;
   display: block;
@@ -821,9 +869,9 @@ select option {
   object-fit: contain;
   position: relative;
   transition:
-    filter 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+    filter 0.3s ease,
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
   z-index: 2;
 }
 
@@ -1583,6 +1631,83 @@ select {
   background: var(--accent-dim);
   border-color: rgba(0, 201, 167, 0.3);
   color: var(--accent);
+}
+
+.upload-prompt-backdrop {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 300;
+}
+
+.upload-prompt-modal {
+  background: var(--surface);
+  border: 1px solid var(--border-mid);
+  border-radius: 14px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 380px;
+  padding: 36px 32px;
+  text-align: center;
+  width: calc(100% - 32px);
+}
+
+.upload-prompt-icon {
+  align-items: center;
+  background: var(--accent-dim);
+  border: 1px solid rgba(0, 201, 167, 0.22);
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  display: flex;
+  font-size: 1.6rem;
+  font-weight: 900;
+  height: 52px;
+  justify-content: center;
+  margin-bottom: 4px;
+  width: 52px;
+}
+
+.upload-prompt-modal h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.upload-prompt-modal p {
+  color: var(--text-2);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 300px;
+}
+
+.upload-prompt-close {
+  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  margin-top: 6px;
+  min-height: 40px;
+  padding: 0 28px;
+  transition: box-shadow 0.18s, opacity 0.15s;
+}
+
+.upload-prompt-close:hover {
+  box-shadow: 0 6px 24px rgba(0, 201, 167, 0.45);
+  opacity: 0.9;
 }
 
 .cap-backdrop {

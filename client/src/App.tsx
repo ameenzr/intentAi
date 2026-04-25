@@ -134,7 +134,7 @@ const defaultImageState: ImageState = {
   chromaticAberration: 0,
   stylePreset: "None",
   lutStrength: 0,
-  backgroundColor: "#ffffff",
+  backgroundColor: "transparent",
   backgroundPreset: "None",
   backgroundBlur: 0,
   removeBackground: false,
@@ -151,7 +151,7 @@ const defaultImageState: ImageState = {
   perspectiveV: 0,
   flipped: false,
   zoom: 100,
-  padding: 16,
+  padding: 0,
   alignment: "Center",
   headlineText: "",
   subtext: "",
@@ -625,9 +625,10 @@ function App() {
   const [imageState, setImageState] = useState<ImageState>(defaultImageState);
   const [showBefore, setShowBefore] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showUploadPrompt, setShowUploadPrompt] = useState(false);
   const [generatedInterface, setGeneratedInterface] =
     useState<GeneratedInterface | null>(null);
-  const [generatedUserIntent, setGeneratedUserIntent] = useState("");
   const [lastGenerationIntent, setLastGenerationIntent] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [isGeneratingInterface, setIsGeneratingInterface] = useState(false);
@@ -726,7 +727,6 @@ function App() {
   const handleSelectSoftware = (id: string) => {
     setSelectedSoftwareId(id);
     setGeneratedInterface(null);
-    setGeneratedUserIntent("");
     setUserVision("");
     setImagePreviewUrl(null);
     setImageFile(null);
@@ -751,6 +751,23 @@ function App() {
     }
   }, [isImageEditing]);
 
+  const loadImageFile = (file: File) => {
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
+      setImagePreviewUrl(null);
+      setImageFile(null);
+      setImageFileName("");
+      setImageError("Upload a PNG, JPG, JPEG, or WebP image for the demo preview.");
+      return;
+    }
+    setImageError("");
+    setImageFileName(file.name);
+    setImageFile(file);
+    setImagePreviewUrl(URL.createObjectURL(file));
+    setImageState(defaultImageState);
+    setGeneratedInterface(null);
+    setUserVision("");
+  };
+
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
@@ -760,23 +777,7 @@ function App() {
       setImageError("");
       return;
     }
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
-      event.target.value = "";
-      setImagePreviewUrl(null);
-      setImageFile(null);
-      setImageFileName("");
-      setImageError(
-        "Upload a PNG, JPG, JPEG, or WebP image for the demo preview."
-      );
-      return;
-    }
-    setImageError("");
-    setImageFileName(file.name);
-    setImageFile(file);
-    setImagePreviewUrl(URL.createObjectURL(file));
-    setImageState(defaultImageState);
-    setGeneratedInterface(null);
-    setGeneratedUserIntent("");
+    loadImageFile(file);
   };
 
   const updateImageCapability = (capabilityId: string, value: ControlValue) => {
@@ -968,8 +969,18 @@ function App() {
     setShowBefore(false);
   };
 
+  const loadCorsImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
+    });
+
   const exportEditedImage = async (formatOverride?: "png" | "jpeg" | "webp" | "tiff") => {
-    const image = imageElementRef.current;
+    if (!imagePreviewUrl) return;
+    const image = await loadCorsImage(imagePreviewUrl).catch(() => imageElementRef.current);
     if (!image) return;
 
     const selectedFormat = formatOverride ?? imageState.outputFormat.toLowerCase();
@@ -1107,14 +1118,19 @@ function App() {
       context.fillText(imageState.watermarkText, width - 24, height - 24);
     }
 
-    const link = document.createElement("a");
-    const extension = getExportExtension(format);
-    link.download = `miniphotopro-export.${extension}`;
-    link.href = canvas.toDataURL(
-      getExportMimeType(format),
-      Math.max(0.08, 1 - imageState.compression / 120)
-    );
-    link.click();
+    try {
+      const dataUrl = canvas.toDataURL(
+        getExportMimeType(format),
+        Math.max(0.08, 1 - imageState.compression / 120)
+      );
+      const link = document.createElement("a");
+      const extension = getExportExtension(format);
+      link.download = `miniphotopro-export.${extension}`;
+      link.href = dataUrl;
+      link.click();
+    } catch {
+      setImageError("Export failed — the image could not be read due to cross-origin restrictions.");
+    }
   };
 
   const generateInterface = async (intentOverride?: string) => {
@@ -1125,6 +1141,10 @@ function App() {
     }
     if (!intent) {
       setGenerationError("Describe your goal before generating.");
+      return;
+    }
+    if (isImageEditing && !imagePreviewUrl) {
+      setShowUploadPrompt(true);
       return;
     }
     setIsGeneratingInterface(true);
@@ -1183,18 +1203,15 @@ function App() {
         }
         const nextGeneratedInterface = payload as GeneratedInterface;
         setGeneratedInterface(nextGeneratedInterface);
-        setGeneratedUserIntent(intent);
       } else if (!isWorkspaceBuildingEnabled) {
         setGeneratedInterface(null);
-        setGeneratedUserIntent(intent);
       } else {
         throw new Error("Could not build workspace.");
       }
       setShowBefore(false);
     } catch (error) {
       setGeneratedInterface(null);
-      setGeneratedUserIntent("");
-      setGenerationError(
+        setGenerationError(
         error instanceof Error
           ? error.message
           : "Could not build workspace. Try again."
@@ -1354,7 +1371,7 @@ function App() {
             </label>
           </div>
 
-          {isImageEditing ? (
+          {isImageEditing && imagePreviewUrl ? (
             <div className="quick-prompts">
               {dynamicPrompts.map((prompt) => (
                 <button
@@ -1405,7 +1422,18 @@ function App() {
           </div>
 
           {isImageEditing ? (
-            <div className="upload-zone">
+            <div
+              className={`upload-zone${isDragging ? " drag-over" : ""}`}
+              onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) loadImageFile(file);
+              }}
+            >
               <div className="preview-card" ref={previewCardRef}>
                 <button
                   className="fullscreen-button"
@@ -1427,9 +1455,7 @@ function App() {
                 </button>
                 <div
                   className="preview-area"
-                  style={{
-                    background: getBackgroundStyle(imageState),
-                  }}
+                  style={imagePreviewUrl ? { background: getBackgroundStyle(imageState) } : undefined}
                 >
                   {isGeneratingInterface && isAiEditingEnabled ? (
                     <div className="ai-generating-overlay">
@@ -1447,6 +1473,9 @@ function App() {
                         padding: `${imageState.padding}px`,
                       }}
                     >
+                      <span className={`compare-badge${showBefore ? " is-before" : ""}`}>
+                        {showBefore ? "Before" : "After"}
+                      </span>
                       {imageState.removeBackground ||
                       imageState.backgroundBlur > 0 ||
                       ["Soft Blur", "Blurred Original"].includes(
@@ -1560,8 +1589,8 @@ function App() {
                   ) : (
                     <div className="image-upload-placeholder">
                       <span aria-hidden="true">&#8679;</span>
-                      <strong>Upload an image to give the AI context</strong>
-                      <small>PNG, JPG, JPEG, or WebP</small>
+                      <strong>Drop an image or click Upload</strong>
+                      <small>PNG · JPG · WebP</small>
                     </div>
                   )}
                 </div>
@@ -1583,46 +1612,49 @@ function App() {
                   />
                 </label>
               </div>
-              {imagePreviewUrl ? (
-                <div className="image-tools">
-                  <div className="before-after-toggle" role="group" aria-label="Compare">
-                    <button
-                      type="button"
-                      className={showBefore ? "active" : ""}
-                      onClick={() => setShowBefore(true)}
-                    >
-                      Before
+              <div className="image-tools">
+                {imagePreviewUrl ? (
+                  <>
+                    <div className="before-after-toggle" role="group" aria-label="Compare">
+                      <button
+                        type="button"
+                        className={showBefore ? "active" : ""}
+                        onClick={() => setShowBefore(true)}
+                      >
+                        Before
+                      </button>
+                      <button
+                        type="button"
+                        className={!showBefore ? "active" : ""}
+                        onClick={() => setShowBefore(false)}
+                      >
+                        After
+                      </button>
+                    </div>
+                    <button className="reset-button" type="button" onClick={resetImageState}>
+                      ↺ Reset
                     </button>
-                    <button
-                      type="button"
-                      className={!showBefore ? "active" : ""}
-                      onClick={() => setShowBefore(false)}
-                    >
-                      After
-                    </button>
-                  </div>
-                  <button className="reset-button" type="button" onClick={resetImageState}>
-                    ↺ Reset
-                  </button>
-                  <button
-                    className="export-now-button"
-                    type="button"
-                    onClick={() =>
-                      void exportEditedImage(
-                        imageState.outputFormat === "JPEG"
-                          ? "jpeg"
-                          : imageState.outputFormat === "WebP"
-                            ? "webp"
-                            : imageState.outputFormat === "TIFF"
-                              ? "tiff"
-                              : "png"
-                      )
-                    }
-                  >
-                    &#8595; Export {imageState.outputFormat || "PNG"}
-                  </button>
-                </div>
-              ) : null}
+                  </>
+                ) : null}
+                <button
+                  className="export-now-button"
+                  type="button"
+                  disabled={!imagePreviewUrl}
+                  onClick={() =>
+                    void exportEditedImage(
+                      imageState.outputFormat === "JPEG"
+                        ? "jpeg"
+                        : imageState.outputFormat === "WebP"
+                          ? "webp"
+                          : imageState.outputFormat === "TIFF"
+                            ? "tiff"
+                            : "png"
+                    )
+                  }
+                >
+                  &#8595; Export image
+                </button>
+              </div>
             </div>
           ) : (
             <div className="no-media-placeholder">
@@ -1674,7 +1706,7 @@ function App() {
             ) : null}
           </div>
 
-          {isGeneratingInterface ? (
+          {isGeneratingInterface && isWorkspaceBuildingEnabled ? (
             <div className="interface-loading-card" role="status">
               <span className="spinner" aria-hidden="true" />
               <h2>Building purpose-built workspace&hellip;</h2>
@@ -1785,6 +1817,28 @@ function App() {
                 ));
               })()}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showUploadPrompt ? (
+        <div
+          className="upload-prompt-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowUploadPrompt(false)}
+        >
+          <div className="upload-prompt-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="upload-prompt-icon" aria-hidden="true">&#8679;</div>
+            <h2>Upload an image first</h2>
+            <p>Add an image to your workspace before building the interface. The AI uses it to tailor the controls to your photo.</p>
+            <button
+              className="upload-prompt-close"
+              type="button"
+              onClick={() => setShowUploadPrompt(false)}
+            >
+              Got it
+            </button>
           </div>
         </div>
       ) : null}

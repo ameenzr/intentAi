@@ -290,18 +290,17 @@ const buildGenericFallback = (
   softwareProfile: SoftwareProfile,
   userIntent: string
 ) => {
-  const capabilities = softwareProfile.capabilities.slice(0, 6);
-
-  return {
-    interfaceTitle: `${softwareProfile.name} Starter Workspace`,
-    intentSummary: `A beginner-friendly ${softwareProfile.name} workspace for: ${userIntent}`,
-    recommendedWorkflow: [
+  return buildInterface(
+    softwareProfile,
+    userIntent,
+    `${softwareProfile.name} Starter Workspace`,
+    generalCapabilityIds,
+    [
       "Start with the most direct control for the main goal.",
       "Make small adjustments and review the result after each step.",
       "Export once the output matches the intent."
-    ],
-    controls: capabilities.map(createControl)
-  };
+    ]
+  );
 };
 
 export const generateFallbackInterface = (

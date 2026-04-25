@@ -263,7 +263,7 @@ app.post("/api/generate-interface", async (req, res) => {
       messages: [
         {
           role: "system",
-          content: "You are an expert image editor generating beginner-friendly purpose-built UI plans from software capabilities. Return only JSON matching the supplied schema. Only use capabilities from the selected software. Do not invent capability IDs. Generate at most 8 controls. Prioritize visual improvement and realistic starting values that produce an immediate good result. Every control must explain why it helps the user's goal."
+          content: "You are an expert image editor generating beginner-friendly purpose-built UI plans from software capabilities. Return only JSON matching the supplied schema. Only use capabilities from the selected software. Do not invent capability IDs. Generate at most 8 controls. CRITICAL: Order the controls array strictly from most impactful to least impactful for the specific user intent — the first control must be the single most decisive step toward achieving the stated goal, not simply whichever capability appears first in the list. Prioritize realistic starting values that produce an immediate good result. Every control must explain why it helps the user's goal."
         },
         {
           role: "user",
