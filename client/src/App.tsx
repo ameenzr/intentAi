@@ -36,12 +36,6 @@ type CapabilityControl =
   | "color_picker"
   | "text_input";
 
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-};
-
 type ControlValue = string | number | boolean;
 
 type ImageState = {
@@ -175,11 +169,72 @@ const defaultImageState: ImageState = {
   compression: 10,
 };
 
-const quickPrompts = [
+const defaultQuickPrompts = [
   "Make it look professional for an ecommerce listing.",
   "Give it a cinematic, film-like look.",
   "Make it warm and cozy for social media.",
 ];
+
+const getIntentsForFilename = (filename: string): string[] => {
+  const name = filename.toLowerCase();
+  if (name.includes("portrait")) {
+    return [
+      "Turn this into a dramatic cinematic movie poster with a dark moody tone and bold title text",
+      "Make this look like a Netflix thriller poster with high contrast and a cinematic color grade",
+      "Create a film-style poster with warm shadows, vignette, and strong headline typography",
+    ];
+  }
+  if (name.includes("product") && !name.includes("lifestyle")) {
+    return [
+      "Make this product photo look clean and professional for an Amazon listing with a white background",
+      "Prepare this image for ecommerce — clean background, sharp details, well lit",
+      "Turn this into a studio-style product shot with soft shadows and neutral tones",
+    ];
+  }
+  if (name.includes("food") || name.includes("coffee") || name.includes("dessert")) {
+    return [
+      "Make this food photo vibrant and warm for Instagram with golden tones",
+      "Create a cozy cafe aesthetic with soft glow and rich colors",
+      "Enhance this image for social media with warmth, vibrance, and shallow depth feel",
+    ];
+  }
+  if (name.includes("living") || name.includes("room") || name.includes("real estate")) {
+    return [
+      "Enhance this interior photo for a real estate listing — bright, airy, and neutral",
+      "Make this room look more spacious and well-lit for a property listing",
+      "Correct lighting and perspective for a professional architectural look",
+    ];
+  }
+  if (name.includes("selfie") || name.includes("linkedin")) {
+    return [
+      "Retouch this portrait for a LinkedIn headshot — clean, professional, and well-lit",
+      "Make this look like a corporate profile photo with natural skin and bright eyes",
+      "Enhance this portrait subtly without making it look artificial",
+    ];
+  }
+  if (name.includes("lifestyle") || name.includes("campaign")) {
+    return [
+      "Create a promotional image with brand colors and bold text for a product launch",
+      "Turn this into a social media ad with overlay color and headline text",
+      "Design a campaign banner with strong typography and visual hierarchy",
+    ];
+  }
+  if (name.includes("street") || name.includes("vintage")) {
+    return [
+      "Give this image a vintage film look with grain and faded tones",
+      "Make this look like a retro photo with matte colors and subtle grain",
+      "Apply a nostalgic film aesthetic with soft contrast",
+    ];
+  }
+  if (name.includes("premium") || name.includes("luxury")) {
+    return [
+      "Make this look premium and high-end with subtle tones and clean lighting",
+      "Give this a luxury brand feel with soft contrast and neutral colors",
+      "Enhance this image to feel minimal, refined, and expensive",
+    ];
+  }
+  return defaultQuickPrompts;
+};
 
 function getDomainLabel(domain: string): string {
   return domain.replace(/_/g, " ");
@@ -353,7 +408,6 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       vignette: 12,
       glow: 10,
       stylePreset: "Warm Glow",
-      headlineText: current.headlineText || "Cozy moments",
       textPosition: "Bottom",
       outputFormat: "JPEG",
       exportSize: "1080px",
@@ -373,7 +427,6 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       vignette: 36,
       glow: 8,
       stylePreset: "Cinematic",
-      headlineText: current.headlineText || "New Arrival",
       fontSize: 42,
       fontWeight: "Black",
       textPosition: "Bottom",
@@ -499,7 +552,6 @@ function applyPresetToState(current: ImageState, preset: string): ImageState {
       contrast: 126,
       saturation: 118,
       sharpness: 26,
-      headlineText: current.headlineText || "New Video",
       fontSize: 46,
       fontWeight: "Black",
       textPosition: "Center",
@@ -565,6 +617,9 @@ function App() {
     useState<SoftwareProfile | null>(null);
   const [userVision, setUserVision] = useState("");
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [isAiEditingEnabled, setIsAiEditingEnabled] = useState(false);
+  const [isWorkspaceBuildingEnabled, setIsWorkspaceBuildingEnabled] = useState(true);
   const [imageFileName, setImageFileName] = useState("");
   const [imageError, setImageError] = useState("");
   const [imageState, setImageState] = useState<ImageState>(defaultImageState);
@@ -576,10 +631,6 @@ function App() {
   const [lastGenerationIntent, setLastGenerationIntent] = useState("");
   const [generationError, setGenerationError] = useState("");
   const [isGeneratingInterface, setIsGeneratingInterface] = useState(false);
-  const [followUpMessage, setFollowUpMessage] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [followUpError, setFollowUpError] = useState("");
-  const [isSendingFollowUp, setIsSendingFollowUp] = useState(false);
   const [isLoadingSoftware, setIsLoadingSoftware] = useState(true);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [softwareError, setSoftwareError] = useState("");
@@ -590,6 +641,11 @@ function App() {
   const cropAspectRatio = useMemo(
     () => getCropAspectRatio(imageState.cropRatio),
     [imageState.cropRatio]
+  );
+
+  const dynamicPrompts = useMemo(
+    () => (imageFileName ? getIntentsForFilename(imageFileName) : defaultQuickPrompts),
+    [imageFileName]
   );
 
   useEffect(() => {
@@ -671,16 +727,14 @@ function App() {
     setSelectedSoftwareId(id);
     setGeneratedInterface(null);
     setGeneratedUserIntent("");
-    setChatMessages([]);
     setUserVision("");
     setImagePreviewUrl(null);
+    setImageFile(null);
     setImageFileName("");
     setImageError("");
     setImageState(defaultImageState);
     setShowBefore(false);
     setGenerationError("");
-    setFollowUpMessage("");
-    setFollowUpError("");
     setPage("workspace");
   };
 
@@ -691,6 +745,7 @@ function App() {
   useEffect(() => {
     if (!isImageEditing) {
       setImagePreviewUrl(null);
+      setImageFile(null);
       setImageFileName("");
       setImageError("");
     }
@@ -700,6 +755,7 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) {
       setImagePreviewUrl(null);
+      setImageFile(null);
       setImageFileName("");
       setImageError("");
       return;
@@ -707,6 +763,7 @@ function App() {
     if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       event.target.value = "";
       setImagePreviewUrl(null);
+      setImageFile(null);
       setImageFileName("");
       setImageError(
         "Upload a PNG, JPG, JPEG, or WebP image for the demo preview."
@@ -715,7 +772,11 @@ function App() {
     }
     setImageError("");
     setImageFileName(file.name);
+    setImageFile(file);
     setImagePreviewUrl(URL.createObjectURL(file));
+    setImageState(defaultImageState);
+    setGeneratedInterface(null);
+    setGeneratedUserIntent("");
   };
 
   const updateImageCapability = (capabilityId: string, value: ControlValue) => {
@@ -902,22 +963,6 @@ function App() {
     }
   };
 
-  const applyDefaultsFromGeneratedInterface = (generated: GeneratedInterface) => {
-    for (const control of generated.controls ?? []) {
-      if (control.componentType === "button") {
-        if (
-          control.suggestedDefault === true &&
-          !control.capabilityId.startsWith("export")
-        ) {
-          applyControlAction(control.capabilityId);
-        }
-        continue;
-      }
-
-      updateImageCapability(control.capabilityId, control.suggestedDefault);
-    }
-  };
-
   const resetImageState = () => {
     setImageState(defaultImageState);
     setShowBefore(false);
@@ -1072,10 +1117,6 @@ function App() {
     link.click();
   };
 
-  const applyQuickPreset = (preset: string) => {
-    setImageState((current) => applyPresetToState(current, preset));
-  };
-
   const generateInterface = async (intentOverride?: string) => {
     const intent = (intentOverride ?? userVision).trim();
     if (!selectedSoftwareId) {
@@ -1090,36 +1131,69 @@ function App() {
     setGenerationError("");
     setLastGenerationIntent(intent);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/generate-interface`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          softwareId: selectedSoftwareId,
-          userIntent: intent,
-        }),
-      });
-      const payload = (await response.json()) as
-        | GeneratedInterface
-        | { error?: string };
-      if (!response.ok) {
-        throw new Error(
-          "error" in payload && payload.error
-            ? payload.error
-            : "Could not build workspace."
-        );
+      let interfacePromise = null;
+      if (isWorkspaceBuildingEnabled) {
+        interfacePromise = fetch(`${API_BASE_URL}/api/generate-interface`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            softwareId: selectedSoftwareId,
+            userIntent: intent,
+          }),
+        });
       }
-      const nextGeneratedInterface = payload as GeneratedInterface;
-      setGeneratedInterface(nextGeneratedInterface);
-      setGeneratedUserIntent(intent);
-      setChatMessages([]);
-      setFollowUpMessage("");
-      setFollowUpError("");
-      applyDefaultsFromGeneratedInterface(nextGeneratedInterface);
+
+      let editImagePromise = null;
+      if (imageFile && isAiEditingEnabled) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        formData.append("userIntent", intent);
+        editImagePromise = fetch(`${API_BASE_URL}/api/edit-image`, {
+          method: "POST",
+          body: formData,
+        });
+      }
+
+      const [response, editResponse] = await Promise.all([
+        interfacePromise,
+        editImagePromise,
+      ]);
+
+      if (editResponse && editResponse.ok) {
+        try {
+          const editPayload = await editResponse.json() as { imageUrl?: string };
+          if (editPayload.imageUrl) {
+            setImagePreviewUrl(editPayload.imageUrl);
+          }
+        } catch (e) {
+          console.error("Failed to parse edit response", e);
+        }
+      }
+
+      if (response && response.ok) {
+        const payload = (await response.json()) as
+          | GeneratedInterface
+          | { error?: string };
+        if (!response.ok) {
+          throw new Error(
+            "error" in payload && payload.error
+              ? payload.error
+              : "Could not build workspace."
+          );
+        }
+        const nextGeneratedInterface = payload as GeneratedInterface;
+        setGeneratedInterface(nextGeneratedInterface);
+        setGeneratedUserIntent(intent);
+      } else if (!isWorkspaceBuildingEnabled) {
+        setGeneratedInterface(null);
+        setGeneratedUserIntent(intent);
+      } else {
+        throw new Error("Could not build workspace.");
+      }
       setShowBefore(false);
     } catch (error) {
       setGeneratedInterface(null);
       setGeneratedUserIntent("");
-      setChatMessages([]);
       setGenerationError(
         error instanceof Error
           ? error.message
@@ -1132,67 +1206,6 @@ function App() {
 
   const handleQuickPrompt = (prompt: string) => {
     setUserVision(prompt);
-    void generateInterface(prompt);
-  };
-
-  const sendFollowUp = async () => {
-    const message = followUpMessage.trim();
-    if (!generatedInterface || !generatedUserIntent) {
-      setFollowUpError("Build a workspace before asking a follow-up.");
-      return;
-    }
-    if (!message) {
-      setFollowUpError("Ask how you want to refine the workspace.");
-      return;
-    }
-    const userMessage: ChatMessage = {
-      id: `${Date.now()}-user`,
-      role: "user",
-      content: message,
-    };
-    setChatMessages((msgs) => [...msgs, userMessage]);
-    setFollowUpMessage("");
-    setFollowUpError("");
-    setIsSendingFollowUp(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/follow-up`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          softwareId: selectedSoftwareId,
-          userIntent: generatedUserIntent,
-          generatedInterface,
-          message,
-        }),
-      });
-      const payload = (await response.json()) as {
-        reply?: string;
-        error?: string;
-      };
-      if (!response.ok || !payload.reply) {
-        throw new Error(payload.error ?? "Could not send follow-up.");
-      }
-      setChatMessages((msgs) => [
-        ...msgs,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: payload.reply!,
-        },
-      ]);
-    } catch (error) {
-      const msg =
-        error instanceof Error
-          ? error.message
-          : "Could not send follow-up. Try again.";
-      setFollowUpError(msg);
-      setChatMessages((msgs) => [
-        ...msgs,
-        { id: `${Date.now()}-system`, role: "system", content: msg },
-      ]);
-    } finally {
-      setIsSendingFollowUp(false);
-    }
   };
 
   // ── Landing page ──────────────────────────────────────────────────────────
@@ -1315,11 +1328,35 @@ function App() {
               value={userVision}
               onChange={(e) => setUserVision(e.target.value)}
             />
+            {imageFile ? (
+              <label className="ai-edit-toggle">
+                <div className="switch">
+                  <input
+                    type="checkbox"
+                    checked={isAiEditingEnabled}
+                    onChange={(e) => setIsAiEditingEnabled(e.target.checked)}
+                  />
+                  <span className="slider"></span>
+                </div>
+                <span>Active AI Image Editing</span>
+              </label>
+            ) : null}
+            <label className="ai-edit-toggle" style={{ marginTop: imageFile ? "4px" : "12px" }}>
+              <div className="switch">
+                <input
+                  type="checkbox"
+                  checked={isWorkspaceBuildingEnabled}
+                  onChange={(e) => setIsWorkspaceBuildingEnabled(e.target.checked)}
+                />
+                <span className="slider"></span>
+              </div>
+              <span>Build Workspace Controls</span>
+            </label>
           </div>
 
           {isImageEditing ? (
             <div className="quick-prompts">
-              {quickPrompts.map((prompt) => (
+              {dynamicPrompts.map((prompt) => (
                 <button
                   key={prompt}
                   type="button"
@@ -1338,7 +1375,7 @@ function App() {
             disabled={isGeneratingInterface || isLoadingDetails}
             onClick={() => void generateInterface()}
           >
-            {isGeneratingInterface ? "Building..." : "Build Workspace"}
+            {isGeneratingInterface ? "Generating..." : "Generate"}
           </button>
 
           {generationError ? (
@@ -1356,73 +1393,6 @@ function App() {
             </div>
           ) : null}
 
-          {generatedInterface ? (
-            <>
-              <div className="chat-divider">
-                <span>Refinement chat</span>
-              </div>
-
-              <div className="chat-thread">
-                {chatMessages.length === 0 ? (
-                  <p className="muted-state">
-                    Ask how to refine the workspace...
-                  </p>
-                ) : null}
-                {chatMessages.map((msg) => (
-                  <div
-                    className={`chat-message chat-message-${msg.role}`}
-                    key={msg.id}
-                  >
-                    <span>
-                      {msg.role === "user"
-                        ? "You"
-                        : msg.role === "assistant"
-                          ? "Assistant"
-                          : "System"}
-                    </span>
-                    <p>{msg.content}</p>
-                  </div>
-                ))}
-                {isSendingFollowUp ? (
-                  <div className="chat-message chat-message-assistant">
-                    <span>Assistant</span>
-                    <div
-                      className="typing-indicator"
-                      aria-label="Assistant typing"
-                    >
-                      <span />
-                      <span />
-                      <span />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              {followUpError ? (
-                <p className="error-message">{followUpError}</p>
-              ) : null}
-
-              <div className="follow-up-composer">
-                <input
-                  aria-label="Ask how to refine this"
-                  placeholder="Ask how to refine this..."
-                  type="text"
-                  value={followUpMessage}
-                  onChange={(e) => setFollowUpMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void sendFollowUp();
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={isSendingFollowUp}
-                  onClick={() => void sendFollowUp()}
-                >
-                  {isSendingFollowUp ? "..." : "Send"}
-                </button>
-              </div>
-            </>
-          ) : null}
         </section>
 
         {/* ── Image / Media panel ─────────────────────────────────── */}
@@ -1461,6 +1431,12 @@ function App() {
                     background: getBackgroundStyle(imageState),
                   }}
                 >
+                  {isGeneratingInterface && isAiEditingEnabled ? (
+                    <div className="ai-generating-overlay">
+                      <div className="loading-spinner" aria-hidden="true" />
+                      <p>Generating AI edits...</p>
+                    </div>
+                  ) : null}
                   {imagePreviewUrl ? (
                     <div
                       className={`editor-stage editor-align-${imageState.alignment
@@ -1597,17 +1573,19 @@ function App() {
               {imageError ? (
                 <p className="error-message">{imageError}</p>
               ) : null}
-              <label className="upload-button">
-                {imageFileName ? "Replace image" : "Upload image"}
-                <input
-                  accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
-                  type="file"
-                  onChange={handleImageChange}
-                />
-              </label>
+              <div className="upload-actions">
+                <label className="upload-button">
+                  {imageFileName ? "Replace image" : "Upload image"}
+                  <input
+                    accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+                    type="file"
+                    onChange={handleImageChange}
+                  />
+                </label>
+              </div>
               {imagePreviewUrl ? (
                 <div className="image-tools">
-                  <div className="before-after-toggle">
+                  <div className="before-after-toggle" role="group" aria-label="Compare">
                     <button
                       type="button"
                       className={showBefore ? "active" : ""}
@@ -1623,17 +1601,8 @@ function App() {
                       After
                     </button>
                   </div>
-                  <button type="button" onClick={resetImageState}>
-                    Reset to Original
-                  </button>
-                  <button type="button" onClick={() => applyQuickPreset("Ecommerce Clean")}>
-                    Ecommerce Clean
-                  </button>
-                  <button type="button" onClick={() => applyQuickPreset("Instagram Cozy")}>
-                    Instagram Cozy
-                  </button>
-                  <button type="button" onClick={() => applyQuickPreset("Cinematic Poster")}>
-                    Cinematic Poster
+                  <button className="reset-button" type="button" onClick={resetImageState}>
+                    ↺ Reset
                   </button>
                   <button
                     className="export-now-button"

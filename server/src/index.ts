@@ -1,6 +1,7 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
+import multer from "multer";
 import OpenAI from "openai";
 import {
   type SoftwareProfile,
@@ -14,6 +15,7 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT ?? 4000;
+const upload = multer({ storage: multer.memoryStorage() });
 const isOpenAIConfigured = () => {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
 
@@ -308,124 +310,65 @@ app.post("/api/generate-interface", async (req, res) => {
   }
 });
 
-app.post("/api/follow-up", async (req, res) => {
-  const { softwareId, userIntent, generatedInterface, message } =
-    req.body as FollowUpRequest;
-
-  if (
-    typeof softwareId !== "string" ||
-    typeof userIntent !== "string" ||
-    typeof message !== "string" ||
-    !generatedInterface ||
-    typeof generatedInterface !== "object"
-  ) {
-    res.status(400).json({
-      error:
-        "softwareId, userIntent, generatedInterface, and message are required"
-    });
-    return;
-  }
-
-  const softwareProfile = softwareProfiles.find(
-    (profile) => profile.id === softwareId
-  );
-
-  if (!softwareProfile) {
-    res.status(404).json({
-      error: "Software profile not found",
-      softwareId
-    });
-    return;
-  }
-
-  if (!isGeneratedInterface(generatedInterface, softwareProfile)) {
-    res.status(400).json({
-      error: "generatedInterface does not match the selected software profile"
-    });
-    return;
-  }
-
-  if (!isOpenAIConfigured()) {
-    res.json(
-      generateFallbackFollowUp(
-        softwareProfile,
-        userIntent,
-        generatedInterface,
-        message
-      )
-    );
-    return;
-  }
-
-  const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-  });
-
+app.post("/api/edit-image", upload.single("image"), async (req, res) => {
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are an experienced creative software professional helping a beginner use a generated interface. Be practical, encouraging, and specific. Explain controls, suggest value changes, and help the result feel more premium, natural, clean, dramatic, or polished when asked. Return only JSON matching the schema."
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            userIntent,
-            message,
-            software: {
-              name: softwareProfile.name,
-              domain: softwareProfile.domain,
-              description: softwareProfile.description,
-              capabilities: softwareProfile.capabilities
-            },
-            generatedInterface
-          })
-        }
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "follow_up_reply",
-          strict: true,
-          schema: followUpResponseSchema
-        }
-      }
-    });
-
-    const content = response.choices[0].message.content;
-    if (!content) {
-      throw new Error("OpenAI returned an empty response.");
-    }
-
-    const followUpResponse = parseFollowUpResponse(content);
-
-    if (!followUpResponse) {
-      res.json(
-        generateFallbackFollowUp(
-          softwareProfile,
-          userIntent,
-          generatedInterface,
-          message
-        )
-      );
+    const userIntent = req.body.userIntent;
+    
+    if (!req.file || typeof userIntent !== "string") {
+      res.status(400).json({ error: "Image file and userIntent are required" });
       return;
     }
 
-    res.json(followUpResponse);
+    if (!isOpenAIConfigured()) {
+      // Mock delay and response for fallback mode
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      res.json({ imageUrl: "https://picsum.photos/800/800" });
+      return;
+    }
+
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    
+    // Step 1: Describe the uploaded image
+    const base64Image = req.file.buffer.toString("base64");
+    const mimeType = req.file.mimetype;
+    
+    const visionResponse = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this image in detail. Focus on the main subject, setting, style, and colors." },
+            { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64Image}` } }
+          ]
+        }
+      ]
+    });
+    
+    const description = visionResponse.choices[0].message.content || "An image";
+
+    // Step 2: Generate new image based on description + user intent
+    const generateResponse = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: `Original image description: ${description}. Now make the following changes/edits as requested by the user: ${userIntent}. Make it look extremely high quality and professional.`,
+      n: 1,
+      size: "1024x1024",
+    });
+
+    const imageUrl = generateResponse.data[0].url;
+    
+    if (!imageUrl) {
+      throw new Error("Failed to generate image url");
+    }
+
+    res.json({ imageUrl });
   } catch (error) {
-    console.error("OpenAI follow-up failed", error);
-    res.json(
-      generateFallbackFollowUp(
-        softwareProfile,
-        userIntent,
-        generatedInterface,
-        message
-      )
-    );
+    console.error("Image editing failed:", error);
+    res.status(500).json({ error: "Failed to edit image" });
   }
 });
+
+
 
 app.listen(port, () => {
   console.log(`IntentUI API listening on http://localhost:${port}`);
