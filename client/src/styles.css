@@ -1256,11 +1256,27 @@ select option {
   padding: 16px;
 }
 
+.loading-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .interface-loading-card h2 {
+  animation: step-fade 0.35s ease;
   color: var(--accent);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
   font-weight: 600;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes step-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .spinner {
@@ -1335,11 +1351,24 @@ select option {
   border-color: var(--border-strong);
 }
 
+.generated-control-card-applied {
+  border-color: rgba(0, 201, 167, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(0, 201, 167, 0.08);
+}
+
 .generated-control-heading {
   align-items: flex-start;
   display: flex;
   gap: 10px;
   justify-content: space-between;
+}
+
+.generated-control-badges {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 5px;
 }
 
 .generated-control-heading h3 {
@@ -1366,6 +1395,12 @@ select option {
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 3px 8px;
+}
+
+.generated-control-heading .generated-applied-badge {
+  background: var(--accent-dim);
+  border-color: rgba(0, 201, 167, 0.28);
+  color: var(--accent);
 }
 
 .generated-slider {

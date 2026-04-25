@@ -25,6 +25,8 @@ const isOpenAIConfigured = () => {
 type GenerateInterfaceRequest = {
   softwareId?: unknown;
   userIntent?: unknown;
+  imageData?: unknown;
+  imageMimeType?: unknown;
 };
 
 type FollowUpRequest = {
@@ -227,7 +229,7 @@ app.get("/api/software/:id", (req, res) => {
 });
 
 app.post("/api/generate-interface", async (req, res) => {
-  const { softwareId, userIntent } = req.body as GenerateInterfaceRequest;
+  const { softwareId, userIntent, imageData, imageMimeType } = req.body as GenerateInterfaceRequest;
 
   if (typeof softwareId !== "string" || typeof userIntent !== "string") {
     res.status(400).json({
@@ -258,25 +260,74 @@ app.post("/api/generate-interface", async (req, res) => {
   });
 
   try {
+    // ── Step 1: Analyze the uploaded image if provided ────────────────────
+    let imageAnalysis = "";
+    const hasImage =
+      typeof imageData === "string" &&
+      imageData.length > 0 &&
+      typeof imageMimeType === "string";
+
+    if (hasImage) {
+      try {
+        const visionResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          max_tokens: 300,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: "Analyze this image for photo editing. In 3-4 sentences identify: the main subject and scene, any lighting issues (overexposed, underexposed, harsh shadows, flat light), color characteristics (warm, cool, desaturated, color casts), and the 2-3 most impactful edits that would improve it. Be specific and technical."
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: `data:${imageMimeType as string};base64,${imageData as string}` }
+                }
+              ]
+            }
+          ]
+        });
+        imageAnalysis = visionResponse.choices[0].message.content ?? "";
+      } catch {
+        // Vision analysis is best-effort; continue without it
+      }
+    }
+
+    // ── Step 2: Generate the control interface ────────────────────────────
+    const systemPrompt = [
+      "You are an expert image editor generating beginner-friendly purpose-built UI plans from software capabilities.",
+      "Return only JSON matching the supplied schema.",
+      "Only use capabilities from the selected software. Do not invent capability IDs.",
+      "Generate at most 8 controls.",
+      "CRITICAL: Order the controls array strictly from most impactful to least impactful for the specific user intent — the first control must be the single most decisive step toward achieving the stated goal, not simply whichever capability appears first in the list.",
+      "Prioritize realistic starting values that produce an immediate good result.",
+      "The suggestedDefault values will be automatically applied to the user's preview image immediately after generation, so choose safe, visible, production-friendly defaults.",
+      "For button controls, set suggestedDefault to true only when the action should visually apply immediately, such as remove_background or an adaptive look. Use false for export buttons.",
+      imageAnalysis
+        ? "IMAGE ANALYSIS IS PROVIDED. Use it to personalise every control: reference specific observations from the image (e.g. 'your image is slightly underexposed', 'the warm colour cast can be corrected') in the purpose and proTip fields. Let the analysis drive suggestedDefault values."
+        : "No image was provided. Give general best-practice suggestions.",
+      "Every control must explain exactly why it helps the user's specific goal."
+    ].join(" ");
+
+    const userPayload: Record<string, unknown> = {
+      userIntent,
+      software: {
+        name: softwareProfile.name,
+        domain: softwareProfile.domain,
+        description: softwareProfile.description,
+        capabilities: softwareProfile.capabilities
+      }
+    };
+    if (imageAnalysis) {
+      userPayload.imageAnalysis = imageAnalysis;
+    }
+
     const response = await openai.chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
       messages: [
-        {
-          role: "system",
-          content: "You are an expert image editor generating beginner-friendly purpose-built UI plans from software capabilities. Return only JSON matching the supplied schema. Only use capabilities from the selected software. Do not invent capability IDs. Generate at most 8 controls. CRITICAL: Order the controls array strictly from most impactful to least impactful for the specific user intent — the first control must be the single most decisive step toward achieving the stated goal, not simply whichever capability appears first in the list. Prioritize realistic starting values that produce an immediate good result. Every control must explain why it helps the user's goal."
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            userIntent,
-            software: {
-              name: softwareProfile.name,
-              domain: softwareProfile.domain,
-              description: softwareProfile.description,
-              capabilities: softwareProfile.capabilities
-            }
-          })
-        }
+        { role: "system", content: systemPrompt },
+        { role: "user", content: JSON.stringify(userPayload) }
       ],
       response_format: {
         type: "json_schema",
@@ -355,7 +406,7 @@ app.post("/api/edit-image", upload.single("image"), async (req, res) => {
       size: "1024x1024",
     });
 
-    const imageUrl = generateResponse.data[0].url;
+    const imageUrl = generateResponse.data?.[0]?.url;
     
     if (!imageUrl) {
       throw new Error("Failed to generate image url");

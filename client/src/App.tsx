@@ -627,6 +627,8 @@ function App() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showUploadPrompt, setShowUploadPrompt] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [autoAppliedControlIds, setAutoAppliedControlIds] = useState<string[]>([]);
   const [generatedInterface, setGeneratedInterface] =
     useState<GeneratedInterface | null>(null);
   const [lastGenerationIntent, setLastGenerationIntent] = useState("");
@@ -727,6 +729,7 @@ function App() {
   const handleSelectSoftware = (id: string) => {
     setSelectedSoftwareId(id);
     setGeneratedInterface(null);
+    setAutoAppliedControlIds([]);
     setUserVision("");
     setImagePreviewUrl(null);
     setImageFile(null);
@@ -765,6 +768,7 @@ function App() {
     setImagePreviewUrl(URL.createObjectURL(file));
     setImageState(defaultImageState);
     setGeneratedInterface(null);
+    setAutoAppliedControlIds([]);
     setUserVision("");
   };
 
@@ -964,10 +968,64 @@ function App() {
     }
   };
 
-  const resetImageState = () => {
+  const applyGeneratedControlsToImage = (generated: GeneratedInterface) => {
+    const appliedControlIds: string[] = [];
+
     setImageState(defaultImageState);
+
+    for (const control of generated.controls ?? []) {
+      const capabilityId = control.capabilityId;
+
+      if (!capabilityId || control.suggestedDefault === undefined) {
+        continue;
+      }
+
+      if (control.componentType === "button") {
+        const shouldApplyVisualAction =
+          control.suggestedDefault === true &&
+          !capabilityId.startsWith("export");
+
+        if (shouldApplyVisualAction) {
+          applyControlAction(capabilityId);
+          appliedControlIds.push(capabilityId);
+        }
+
+        continue;
+      }
+
+      updateImageCapability(capabilityId, control.suggestedDefault);
+      appliedControlIds.push(capabilityId);
+    }
+
+    setAutoAppliedControlIds(appliedControlIds);
     setShowBefore(false);
   };
+
+  const resetImageState = () => {
+    setImageState(defaultImageState);
+    setAutoAppliedControlIds([]);
+    setShowBefore(false);
+  };
+
+  const resizeImageToBase64 = (file: File, maxPx = 1024): Promise<{ data: string; mimeType: string }> =>
+    new Promise((resolve, reject) => {
+      const img = new window.Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("canvas")); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+        resolve({ data: dataUrl.split(",")[1], mimeType: "image/jpeg" });
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
 
   const loadCorsImage = (src: string): Promise<HTMLImageElement> =>
     new Promise((resolve, reject) => {
@@ -1150,7 +1208,29 @@ function App() {
     setIsGeneratingInterface(true);
     setGenerationError("");
     setLastGenerationIntent(intent);
+
+    const hasImage = isImageEditing && !!imageFile;
+    const steps = hasImage
+      ? ["Uploading image to AI…", "Analysing your photo…", "Planning controls…", "Building workspace…", "Applying presets…"]
+      : ["Planning controls…", "Building workspace…", "Applying presets…"];
+    let stepIdx = 0;
+    setLoadingMessage(steps[0]);
+    const stepTimer = setInterval(() => {
+      stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+      setLoadingMessage(steps[stepIdx]);
+    }, 2200);
+
     try {
+      let imagePayload: { imageData?: string; imageMimeType?: string } = {};
+      if (hasImage && imageFile) {
+        try {
+          const encoded = await resizeImageToBase64(imageFile);
+          imagePayload = { imageData: encoded.data, imageMimeType: encoded.mimeType };
+        } catch {
+          // best-effort; proceed without image data
+        }
+      }
+
       let interfacePromise = null;
       if (isWorkspaceBuildingEnabled) {
         interfacePromise = fetch(`${API_BASE_URL}/api/generate-interface`, {
@@ -1159,6 +1239,7 @@ function App() {
           body: JSON.stringify({
             softwareId: selectedSoftwareId,
             userIntent: intent,
+            ...imagePayload,
           }),
         });
       }
@@ -1202,21 +1283,27 @@ function App() {
           );
         }
         const nextGeneratedInterface = payload as GeneratedInterface;
+        setLoadingMessage("Applying presets…");
         setGeneratedInterface(nextGeneratedInterface);
+        applyGeneratedControlsToImage(nextGeneratedInterface);
       } else if (!isWorkspaceBuildingEnabled) {
         setGeneratedInterface(null);
+        setAutoAppliedControlIds([]);
       } else {
         throw new Error("Could not build workspace.");
       }
       setShowBefore(false);
     } catch (error) {
       setGeneratedInterface(null);
+      setAutoAppliedControlIds([]);
         setGenerationError(
         error instanceof Error
           ? error.message
           : "Could not build workspace. Try again."
       );
     } finally {
+      clearInterval(stepTimer);
+      setLoadingMessage("");
       setIsGeneratingInterface(false);
     }
   };
@@ -1709,7 +1796,9 @@ function App() {
           {isGeneratingInterface && isWorkspaceBuildingEnabled ? (
             <div className="interface-loading-card" role="status">
               <span className="spinner" aria-hidden="true" />
-              <h2>Building purpose-built workspace&hellip;</h2>
+              <div className="loading-steps">
+                <h2>{loadingMessage || "Building workspace…"}</h2>
+              </div>
             </div>
           ) : !generatedInterface ? (
             <div className="interface-empty-state">
@@ -1723,6 +1812,7 @@ function App() {
                 <GeneratedInterfacePanel
                   generatedInterface={generatedInterface}
                   showHeader={false}
+                  autoAppliedControlIds={autoAppliedControlIds}
                   onControlChange={updateImageCapability}
                   onControlAction={applyControlAction}
                 />

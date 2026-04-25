@@ -7,6 +7,7 @@ import type {
 type GeneratedInterfacePanelProps = {
   generatedInterface: Partial<GeneratedInterface>;
   showHeader?: boolean;
+  autoAppliedControlIds?: string[];
   onControlChange?: (capabilityId: string, value: ControlValue) => void;
   onControlAction?: (capabilityId: string) => void;
 };
@@ -69,6 +70,7 @@ const getInitialValues = (controls: RenderableControl[]) =>
 function GeneratedInterfacePanel({
   generatedInterface,
   showHeader = true,
+  autoAppliedControlIds = [],
   onControlChange,
   onControlAction
 }: GeneratedInterfacePanelProps) {
@@ -79,6 +81,7 @@ function GeneratedInterfacePanel({
   const [controlValues, setControlValues] = useState<Record<string, ControlValue>>(
     () => getInitialValues(controls)
   );
+  const autoAppliedControls = new Set(autoAppliedControlIds);
 
   useEffect(() => {
     setControlValues(getInitialValues(controls));
@@ -239,34 +242,46 @@ function GeneratedInterfacePanel({
       </div>
 
       <div className="generated-control-list">
-        {controls.map((control, index) => (
-          <article
-            className="generated-control-card"
-            key={getControlId(control, index)}
-          >
-            <div className="generated-control-heading">
-              <div>
-                <h3>{getControlLabel(control)}</h3>
-                <span>{getControlId(control, index)}</span>
+        {controls.map((control, index) => {
+          const controlId = getControlId(control, index);
+          const isAutoApplied = autoAppliedControls.has(controlId);
+
+          return (
+            <article
+              className={`generated-control-card${
+                isAutoApplied ? " generated-control-card-applied" : ""
+              }`}
+              key={controlId}
+            >
+              <div className="generated-control-heading">
+                <div>
+                  <h3>{getControlLabel(control)}</h3>
+                  <span>{controlId}</span>
+                </div>
+                <div className="generated-control-badges">
+                  <small>
+                    {typeof control.componentType === "string"
+                      ? control.componentType
+                      : "unknown"}
+                  </small>
+                  {isAutoApplied ? (
+                    <small className="generated-applied-badge">Applied</small>
+                  ) : null}
+                </div>
               </div>
-              <small>
-                {typeof control.componentType === "string"
-                  ? control.componentType
-                  : "unknown"}
-              </small>
-            </div>
 
-            {renderControlInput(control, index)}
+              {renderControlInput(control, index)}
 
-            <p className="generated-purpose">
-              {control.purpose ?? "This control helps refine the result."}
-            </p>
-            <p className="generated-pro-tip">
-              <strong>Pro tip</strong>
-              {control.proTip ?? "Make small changes and compare the result."}
-            </p>
-          </article>
-        ))}
+              <p className="generated-purpose">
+                {control.purpose ?? "This control helps refine the result."}
+              </p>
+              <p className="generated-pro-tip">
+                <strong>Pro tip</strong>
+                {control.proTip ?? "Make small changes and compare the result."}
+              </p>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
